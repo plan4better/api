@@ -20,6 +20,7 @@ predicates.hasRequestCategories = predicates.hasRequestParameter('categories');
 // shorthand for standard early-exit conditions
 const hasResponseDataOrRequestErrors = any(predicates.hasResponseData, predicates.hasRequestErrors);
 predicates.hasAdminOnlyResults = not(predicates.hasResultsAtLayers(['venue', 'address', 'street']));
+predicates.hasResponseResults = predicates.hasResponseData;
 
 const serviceWrapper = require('pelias-microservice-wrapper').service;
 const configuration = requireAll(path.join(__dirname, '../service/configurations'));
@@ -215,20 +216,23 @@ function addRoutes(app, peliasConfig) {
       sanitizers.search.middleware(peliasConfig.api),
       middleware.requestLanguage,
       middleware.sizeCalculator(),
+      middleware.normalizeGermanAddress(),
       controllers.libpostal(libpostalService, libpostalShouldExecute),
+      middleware.normalizeGermanStreets(),
       controllers.placeholder(placeholderService, geometricFiltersApply, placeholderGeodisambiguationShouldExecute),
       controllers.placeholder(placeholderService, geometricFiltersApply, placeholderIdsLookupShouldExecute),
       // try 3 different query types: address search using ids, cascading fallback, pelias parser
       controllers.search(peliasConfig, esclient, queries.address_search_using_ids, searchWithIdsShouldExecute),
       controllers.search(peliasConfig, esclient, queries.search, fallbackQueryShouldExecute),
       sanitizers.defer_to_pelias_parser(peliasConfig.api, shouldDeferToPeliasParser), //run additional sanitizers needed for pelias parser
+      middleware.normalizeGermanStreets(),
       controllers.search(peliasConfig, esclient, queries.search_pelias_parser, searchPeliasParserShouldExecute),
       middleware.trimByGranularity(),
       middleware.distance('focus.point.'),
       middleware.confidenceScore(peliasConfig.api),
       middleware.confidenceScoreFallback(),
       middleware.interpolate(interpolationService, interpolationShouldExecute, interpolationConfiguration),
-      middleware.sortResponseData(sorting, predicates.hasAdminOnlyResults),
+      middleware.sortResponseData(sorting, predicates.hasResponseResults),
       middleware.applyOverrides(),
       middleware.dedupe(),
       middleware.accuracy(),
@@ -246,6 +250,7 @@ function addRoutes(app, peliasConfig) {
       middleware.requestLanguage,
       middleware.sizeCalculator(),
       controllers.structured_libpostal(structuredLibpostalService, structuredLibpostalShouldExecute),
+      middleware.normalizeGermanStreets(),
       controllers.search(peliasConfig, esclient, queries.structured_geocoding, not(hasResponseDataOrRequestErrors)),
       middleware.trimByGranularityStructured(),
       middleware.distance('focus.point.'),
